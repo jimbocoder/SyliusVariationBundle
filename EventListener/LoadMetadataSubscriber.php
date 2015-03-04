@@ -55,11 +55,11 @@ class LoadMetadataSubscriber implements EventSubscriber
     {
         $metadata = $eventArgs->getClassMetadata();
 
-        $this->mapManyToMany($metadata);
+        $this->mapManyToMany($metadata, $eventArgs);
 
         $this->mapOneToMany($metadata);
 
-        $this->mapManyToOne($metadata);
+        $this->mapManyToOne($metadata, $eventArgs);
     }
 
     /**
@@ -85,13 +85,18 @@ class LoadMetadataSubscriber implements EventSubscriber
 
     /**
      * @param ClassMetadata $metadata
+     * @param LoadClassMetadataEventArgs $eventArgs
      */
-    private function mapManyToOne(ClassMetadata $metadata)
+    private function mapManyToOne(ClassMetadata $metadata, LoadClassMetadataEventArgs $eventArgs)
     {
+        $cmf = $eventArgs->getEntityManager()->getMetadataFactory();
         foreach ($this->variables as $class) {
             if ($class['option_value']['model'] !== $metadata->getName()) {
                 continue;
             }
+
+            $targetEntity = $class['option']['model'];
+            $targetEntityMetadata = $cmf->getMetadataFor($targetEntity);
 
             $mapping = array(
                 'fieldName' => 'option',
@@ -99,7 +104,7 @@ class LoadMetadataSubscriber implements EventSubscriber
                 'inversedBy' => 'values',
                 'joinColumns' => array(array(
                     'name' => 'option_id',
-                    'referencedColumnName' => 'id',
+                    'referencedColumnName' => $targetEntityMetadata->fieldMappings['id']['columnName'],
                     'nullable' => false,
                     'onDelete' => 'CASCADE'
                 ))
@@ -111,13 +116,18 @@ class LoadMetadataSubscriber implements EventSubscriber
 
     /**
      * @param ClassMetadata $metadata
+     * @param LoadClassMetadataEventArgs $eventArgs
      */
-    private function mapManyToMany(ClassMetadata $metadata)
+    private function mapManyToMany(ClassMetadata $metadata, LoadClassMetadataEventArgs $eventArgs)
     {
+        $cmf = $eventArgs->getEntityManager()->getMetadataFactory();
         foreach ($this->variables as $variable => $class) {
             if ($class['variant']['model'] !== $metadata->getName()) {
                 continue;
             }
+
+            $targetEntity = $class['variable'];
+            $targetEntityMetadata = $cmf->getMetadataFor($targetEntity);
 
             $metadata->mapManyToOne(array(
                 'fieldName'    => 'object',
@@ -125,11 +135,14 @@ class LoadMetadataSubscriber implements EventSubscriber
                 'inversedBy'   => 'variants',
                 'joinColumns'  => array(array(
                     'name'                 => $variable.'_id',
-                    'referencedColumnName' => 'id',
+                    'referencedColumnName' => $targetEntityMetadata->fieldMappings['id']['columnName'],
                     'nullable'             => false,
                     'onDelete'             => 'CASCADE'
                 ))
             ));
+
+            $targetEntity = $class['option_value']['model'];
+            $targetEntityMetadata = $cmf->getMetadataFor($targetEntity);
 
             $metadata->mapManyToMany(array(
                 'fieldName'    => 'options',
@@ -146,7 +159,7 @@ class LoadMetadataSubscriber implements EventSubscriber
                     )),
                     'inverseJoinColumns' => array(array(
                         'name'                 => 'option_value_id',
-                        'referencedColumnName' => 'id',
+                        'referencedColumnName' => $targetEntityMetadata->fieldMappings['id']['columnName'],
                         'unique'               => false,
                         'nullable'             => false,
                         'onDelete'             => 'CASCADE'
